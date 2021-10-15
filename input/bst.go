@@ -20,6 +20,7 @@ func main() {
     fmt.Println("Running go BST sequential")
     
     /*******   PARSING ARGUMENTS   *******/
+    
     hash_workers := flag.Int("hash-workers", 1, "an int")
     data_workers := flag.Int("data-workers", 1, "an int")
     comp_workers := flag.Int("comp-workers", 1, "an int")
