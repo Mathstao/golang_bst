@@ -5,16 +5,37 @@ import (
     "flag"
 )
 
-type node struct {
-    value int
-    left *node
-    right *node
+type Node struct {
+    Value int
+    Left *Node
+    Right *Node
 }
 
-type bst struct {
-    root *node
-    len int
+
+func (n *Node) Insert (value int){
+    if (value > n.Value) {
+        //MOVE RIGHT, value larger
+        if n.Right==nil {
+            //NO RIGHT CHILD, insert
+            n.Right = &Node{Value : value}
+        } else {
+            //repeat same method on right child
+            n.Right.Insert(value)
+        }
+    } else if (value < n.Value) {
+        if n.Left==nil {
+            //NO RIGHT CHILD, insert
+            n.Left = &Node{Value : value}
+        } else {
+            //repeat same method on right child
+            n.Left.Insert(value)
+        }
+    } else {
+        //ALREADY EXISTS
+        fmt.Println("already exists")
+    }
 }
+    
 
 func main() {
     fmt.Println("Running go BST sequential")
@@ -32,5 +53,10 @@ func main() {
     fmt.Println("data workers:", *data_workers)
     fmt.Println("comp workers:", *comp_workers)
     fmt.Println("input file:", *input_file)
+    
+    /***** BINARY SEARCH TREE *****/
+    tree := &Node{Value: 100}
+    tree.Insert(50)
+    fmt.Println(tree);
     
 }
