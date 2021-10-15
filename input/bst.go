@@ -37,6 +37,21 @@ func (n *Node) Insert (value int){
 }
     
 
+func (n *Node) Search (value int) bool {
+    
+    if (n==nil){
+        return false
+    }
+    
+    if (value > n.Value) {
+        //MOVE RIGHT, value larger
+        return n.Right.Search(value)
+    } else if (value < n.Value) {
+        return n.Left.Search(value)
+    }
+    return true
+}
+
 func main() {
     fmt.Println("Running go BST sequential")
     
@@ -56,7 +71,19 @@ func main() {
     
     /***** BINARY SEARCH TREE *****/
     tree := &Node{Value: 100}
-    tree.Insert(50)
-    fmt.Println(tree);
+    tree.Insert(53)
+    tree.Insert(203)
+    tree.Insert(19)
+    tree.Insert(76)
+    tree.Insert(150)
+    tree.Insert(310)
+    tree.Insert(7)
+    tree.Insert(24)
+    tree.Insert(88)
+    tree.Insert(276)
+    
+    fmt.Println(tree.Search(400))
+    
+    
     
 }
