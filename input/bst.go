@@ -12,11 +12,11 @@ import (
     "strings"
 )
 
-
-func checkfile(e error) {
-    if e != nil {
-        panic(e)
-    }
+type InputArgs struct {
+    hash_workers *int
+    data_workers *int
+    comp_workers *int
+    input_file *string
 }
 
 type Node struct {
@@ -25,6 +25,11 @@ type Node struct {
     Right *Node
 }
 
+func checkfile(e error) {
+    if e != nil {
+        panic(e)
+    }
+}
 
 func (n *Node) computeHash() int {
     var hash int = 1;
@@ -104,14 +109,9 @@ func (n *Node) Search (value int) bool {
     return true
 }
 
-func main() {
-    
-    //_GLOBAL_BSTMAP := make(map[int][]int)
-    
-    fmt.Println("Running go BST sequential")
-    
-    /*******   PARSING ARGUMENTS   *******/
-    
+
+
+func parse_args() *InputArgs {
     hash_workers := flag.Int("hash-workers", 1, "an int")
     data_workers := flag.Int("data-workers", 1, "an int")
     comp_workers := flag.Int("comp-workers", 1, "an int")
@@ -119,23 +119,40 @@ func main() {
     
     flag.Parse()
     
-    fmt.Println("hash workers:", *hash_workers)
-    fmt.Println("data workers:", *data_workers)
-    fmt.Println("comp workers:", *comp_workers)
-    fmt.Println("input file:", *input_file)
+    args := InputArgs{hash_workers: hash_workers,
+                      data_workers: data_workers,
+                      comp_workers: comp_workers,
+                      input_file: input_file}
+    return &args
+}
+
+func main() {
     
-    file, err := os.Open(*input_file)
+    bst_hashmap := make(map[int][]int)
+    
+    fmt.Println("Running go BST sequential")
+    
+    /*******   PARSING ARGUMENTS   *******/ 
+    var args *InputArgs = parse_args()
+    
+    fmt.Println("hash workers:", *args.hash_workers)
+    fmt.Println("data workers:", *args.data_workers)
+    fmt.Println("comp workers:", *args.comp_workers)
+    fmt.Println("input file:", *args.input_file)
+    
+    file, err := os.Open(*args.input_file)
     if err != nil {
         log.Fatal(err)
     }
     defer file.Close()
     
     file_scanner := bufio.NewScanner(file)
-    // optionally, resize scanner's capacity for lines over 64K, see next example
+    // optionally, resize scanner's capacity for lines over 64K ... needed?
     
-    
+    var bst_id int = 0;
+    //bst_chan := make(chan *Node)
     for file_scanner.Scan() {
-        fmt.Println("new line here:")
+        fmt.Println("new tree parsing:")
         var s scanner.Scanner
         s.Init(strings.NewReader(file_scanner.Text()))
         var newBST bool = true
@@ -149,41 +166,24 @@ func main() {
             } else {
                 tree.Insert(converted)
             }
-            /*fmt.Printf("%d ", converted)
-            if (err != nil){
-                fmt.Printf("%d ", converted)
-                
-            } else {
-                fmt.Printf("%s\n", err)
-                fmt.Printf("%s\n", "FATAL ERROR COULDN'T CONVERT TO INTEGER")
-            }*/
         }
-        fmt.Println(tree)
-        /*for _, value in range scanner.Text(){
-            fmt.Printf("%d ", strconv.Atoi(value))
-        }*/
-        fmt.Printf("\n")
-        //fmt.Println(scanner.Text()[:])
-        fmt.Println("end of line")
+        //bst_chan <- tree
+        var test[] int
+        var count int = 0
+        test = tree.in_order_traversal(test, &count)
+        var hash int = tree.computeHash()
+        fmt.Printf("hash of %d: %d\n", bst_id, hash)
+        bst_hashmap[hash] = append(bst_hashmap[hash], bst_id)
+        fmt.Println("end of tree parsing")
+        bst_id++
     }
-    
-    /***** BINARY SEARCH TREE *****/
-    
-    tree := test_tree()
-    fmt.Println(tree.Search(400))
-    var test[] int
-    var count int = 0
-    test = tree.in_order_traversal(test, &count)
-    var hash int = tree.computeHash()
-    fmt.Printf("%v\n", test)
-    fmt.Printf("hash value: %d\n", hash)
+    fmt.Println(bst_hashmap)
     
     
     //code diagram
     /*
     1) read file--> if not end of line, insert into binary tree, compute hash, store hashMapBST: list.append(bst id)
     2) for each key in hashMapBST: compare equality, separate out into linkage somehow
-    
     
     
     */
