@@ -1,0 +1,21 @@
+/*fmt.Printf("%d ", converted)
+if (err != nil){
+    fmt.Printf("%d ", converted)
+
+} else {
+    fmt.Printf("%s\n", err)
+    fmt.Printf("%s\n", "FATAL ERROR COULDN'T CONVERT TO INTEGER")
+}*/
+
+/*******************************************************/
+
+/*
+tree := test_tree()
+fmt.Println(tree.Search(400))
+var test[] int
+var count int = 0
+test = tree.in_order_traversal(test, &count)
+var hash int = tree.computeHash()
+fmt.Printf("%v\n", test)
+fmt.Printf("hash value: %d\n", hash)
+*/
