@@ -126,6 +126,21 @@ func identicalTrees(a *Node, b *Node) bool {
     return false
 }
 
+func equalTrees(a *Node, b *Node) bool {
+    count, count2 := 0,0
+    var first_result []int
+    var second_result []int
+    first_result = a.in_order_traversal(first_result, &count)
+    second_result = b.in_order_traversal(second_result, &count2)
+    
+    for i:=0; i < len(first_result); i++ {
+        if (first_result[i] != second_result[i]){
+            return false
+        }
+    }
+    return true
+}
+
 
 func parse_args() InputArgs {
     hash_workers := flag.Int("hash-workers", 1, "an int")
@@ -172,9 +187,6 @@ func run_sequential(input_file *string, bst_list *[]*Node, bst_hashmap *map[int]
             }
         }
         *bst_list = append(*bst_list, tree)
-        var test[] int
-        var count int = 0
-        test = tree.in_order_traversal(test, &count)
         var hash int = tree.computeHash()
         fmt.Printf("hash of %d: %d\n", bst_id, hash)
         (*bst_hashmap)[hash] = append((*bst_hashmap)[hash], bst_id)
@@ -203,7 +215,7 @@ func run_sequential(input_file *string, bst_list *[]*Node, bst_hashmap *map[int]
                         if (!this_group_visited[j]){
                             //next node hasn't been visited, compare with node
                             var next_node *Node = (*bst_list)[ bstids[j] ]
-                            var equal bool = identicalTrees(node, next_node)
+                            var equal bool = equalTrees(node, next_node)
                             if equal{
                                 (*tree_equal)[tree_group] = append((*tree_equal)[tree_group], bstids[j])
                                 this_group_visited[j] = true //grouped nextnode, remove it from iterations
