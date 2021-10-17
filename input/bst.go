@@ -5,10 +5,40 @@ import (
     "flag"
 )
 
+func checkfile(e error) {
+    if e != nil {
+        panic(e)
+    }
+}
+
 type Node struct {
     Value int
     Left *Node
     Right *Node
+}
+
+
+func (n *Node) computeHash() int {
+    var hash int = 1;
+    var result[] int;
+    var count int = 0;
+    for _, value := range n.in_order_traversal(result, &count) {
+        var new_value int = value + 2;
+        hash = (hash * new_value + new_value) % 1000
+    }
+    return hash
+}
+
+func (n *Node) in_order_traversal(result []int, count *int) []int {
+    
+    if (n != nil){
+        result = n.Left.in_order_traversal(result, count)
+        //result[*count] = n.Value
+        result = append(result, n.Value)
+        (*count)++ //unnecessary but leave it, may be helpeful in optimization
+        result = n.Right.in_order_traversal(result, count)
+    }
+    return result
 }
 
 
@@ -69,6 +99,9 @@ func main() {
     fmt.Println("comp workers:", *comp_workers)
     fmt.Println("input file:", *input_file)
     
+    //data, err := os.ReadFile(*input_file)
+    //check(err)
+    
     /***** BINARY SEARCH TREE *****/
     tree := &Node{Value: 100}
     tree.Insert(53)
@@ -83,7 +116,10 @@ func main() {
     tree.Insert(276)
     
     fmt.Println(tree.Search(400))
-    
-    
-    
+    var test[] int
+    var count int = 0
+    test = tree.in_order_traversal(test, &count)
+    var hash int = tree.computeHash()
+    fmt.Printf("%v\n", test)
+    fmt.Printf("hash value: %d\n", hash)
 }
