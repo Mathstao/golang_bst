@@ -143,7 +143,8 @@ func parse_args() InputArgs {
 }
 
 
-func run_sequential(input_file *string, bst_list *[]*Node, bst_hashmap *map[int][]int){
+func run_sequential(input_file *string, bst_list *[]*Node, bst_hashmap *map[int][]int,
+                   tree_equal *map[int][]int){
     
     file, err := os.Open(*input_file)
     if err != nil {
@@ -180,12 +181,46 @@ func run_sequential(input_file *string, bst_list *[]*Node, bst_hashmap *map[int]
         fmt.Println("end of tree parsing")
         bst_id++
     }
+    //iterate over hashmaps, if key > 1, compare trees inside
+    
+    var tree_group int = -1
+    
+    for hash, bstids := range *bst_hashmap {
+        this_group_visited := make(map[int]bool)
+        if (len(bstids) > 1) {
+            fmt.Printf("Compare values in key: %d\n", hash)
+            for i:=0; i < len(bstids); i++ {
+                if (!this_group_visited[i]){
+                    
+                    //node hasn't been visited yet, create new group in tree
+                    tree_group++
+                    (*tree_equal)[tree_group] = append((*tree_equal)[tree_group], bstids[i])
+                    
+                    var node *Node = (*bst_list)[ bstids[i] ]
+                    
+                    this_group_visited[i] = true
+                    for j:=i+1; j < len(bstids); j++ {
+                        if (!this_group_visited[j]){
+                            //next node hasn't been visited, compare with node
+                            var next_node *Node = (*bst_list)[ bstids[j] ]
+                            var equal bool = identicalTrees(node, next_node)
+                            if equal{
+                                (*tree_equal)[tree_group] = append((*tree_equal)[tree_group], bstids[j])
+                                this_group_visited[j] = true //grouped nextnode, remove it from iterations
+                            }
+                        }
+                    }
+                }
+            }
+        }// else no need to print groups with only one tree
+    }
 }
 
 func main() {
     
     bst_hashmap := make(map[int][]int)
     var bst_list []*Node;
+    tree_equal := make(map[int][]int)
     
     
     fmt.Println("Running go BST sequential")
@@ -198,9 +233,10 @@ func main() {
     fmt.Println("comp workers:", args.comp_workers)
     fmt.Println("input file:", args.input_file)
     
-    run_sequential(args.input_file, &bst_list, &bst_hashmap)
+    run_sequential(args.input_file, &bst_list, &bst_hashmap, &tree_equal)
     fmt.Println(bst_hashmap)
     fmt.Println(bst_list)
+    fmt.Println(tree_equal)
     
     //code diagram
     /*
