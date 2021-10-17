@@ -172,7 +172,6 @@ func run_sequential(input_file *string, bst_list *[]*Node, bst_hashmap *map[int]
     var bst_id int = 0
     for file_scanner.Scan() {
         var tree *Node;
-        fmt.Println("new tree parsing:")
         var s scanner.Scanner
         s.Init(strings.NewReader(file_scanner.Text()))
         var newBST bool = true
@@ -188,9 +187,7 @@ func run_sequential(input_file *string, bst_list *[]*Node, bst_hashmap *map[int]
         }
         *bst_list = append(*bst_list, tree)
         var hash int = tree.computeHash()
-        fmt.Printf("hash of %d: %d\n", bst_id, hash)
         (*bst_hashmap)[hash] = append((*bst_hashmap)[hash], bst_id)
-        fmt.Println("end of tree parsing")
         bst_id++
     }
     //iterate over hashmaps, if key > 1, compare trees inside
