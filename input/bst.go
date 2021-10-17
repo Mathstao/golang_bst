@@ -109,9 +109,25 @@ func (n *Node) Search (value int) bool {
     return true
 }
 
+func identicalTrees(a *Node, b *Node) bool {
+    //TODO: test for empty trees!
+    /*1. both empty */
+    if (a == nil && b == nil) {
+        return true
+    }
+    
+    /* 2. both non-empty -> compare them */
+    if (a.Value==b.Value) {
+        if (identicalTrees(a.Left, b.Left) && identicalTrees(a.Right, b.Right)){
+            return true
+        }
+    }
+    /* 3. one empty, one not -> false */
+    return false
+}
 
 
-func parse_args() *InputArgs {
+func parse_args() InputArgs {
     hash_workers := flag.Int("hash-workers", 1, "an int")
     data_workers := flag.Int("data-workers", 1, "an int")
     comp_workers := flag.Int("comp-workers", 1, "an int")
@@ -123,24 +139,13 @@ func parse_args() *InputArgs {
                       data_workers: data_workers,
                       comp_workers: comp_workers,
                       input_file: input_file}
-    return &args
+    return args
 }
 
-func main() {
+
+func run_sequential(input_file *string, bst_list *[]*Node, bst_hashmap *map[int][]int){
     
-    bst_hashmap := make(map[int][]int)
-    
-    fmt.Println("Running go BST sequential")
-    
-    /*******   PARSING ARGUMENTS   *******/ 
-    var args *InputArgs = parse_args()
-    
-    fmt.Println("hash workers:", *args.hash_workers)
-    fmt.Println("data workers:", *args.data_workers)
-    fmt.Println("comp workers:", *args.comp_workers)
-    fmt.Println("input file:", *args.input_file)
-    
-    file, err := os.Open(*args.input_file)
+    file, err := os.Open(*input_file)
     if err != nil {
         log.Fatal(err)
     }
@@ -148,17 +153,15 @@ func main() {
     
     file_scanner := bufio.NewScanner(file)
     // optionally, resize scanner's capacity for lines over 64K ... needed?
-    
-    var bst_id int = 0;
-    //bst_chan := make(chan *Node)
+    var bst_id int = 0
     for file_scanner.Scan() {
+        var tree *Node;
         fmt.Println("new tree parsing:")
         var s scanner.Scanner
         s.Init(strings.NewReader(file_scanner.Text()))
         var newBST bool = true
-        var tree *Node;
-        var converted int;
         for tok := s.Scan(); tok != scanner.EOF; tok = s.Scan() {
+            var converted int;
             converted, _ = strconv.Atoi(s.TokenText())
             if newBST{
                 tree = &Node{Value: converted}
@@ -167,18 +170,37 @@ func main() {
                 tree.Insert(converted)
             }
         }
-        //bst_chan <- tree
+        *bst_list = append(*bst_list, tree)
         var test[] int
         var count int = 0
         test = tree.in_order_traversal(test, &count)
         var hash int = tree.computeHash()
         fmt.Printf("hash of %d: %d\n", bst_id, hash)
-        bst_hashmap[hash] = append(bst_hashmap[hash], bst_id)
+        (*bst_hashmap)[hash] = append((*bst_hashmap)[hash], bst_id)
         fmt.Println("end of tree parsing")
         bst_id++
     }
-    fmt.Println(bst_hashmap)
+}
+
+func main() {
     
+    bst_hashmap := make(map[int][]int)
+    var bst_list []*Node;
+    
+    
+    fmt.Println("Running go BST sequential")
+    
+    /*******   PARSING ARGUMENTS   *******/ 
+    var args InputArgs = parse_args()
+    
+    fmt.Println("hash workers:", args.hash_workers)
+    fmt.Println("data workers:", args.data_workers)
+    fmt.Println("comp workers:", args.comp_workers)
+    fmt.Println("input file:", args.input_file)
+    
+    run_sequential(args.input_file, &bst_list, &bst_hashmap)
+    fmt.Println(bst_hashmap)
+    fmt.Println(bst_list)
     
     //code diagram
     /*
