@@ -36,15 +36,17 @@ type Worker struct {
 func (wr *Worker) Start() {
     go func() {
         for {
-            wr.Queue <- wr.JobChan
+            wr.Queue <- wr.JobChan //worker puts its jobChan on queue (channel of channels). wr.Queue populated by dispatcher.process()
             select {
             case job := <-wr.JobChan:
-                fmt.Println("worker id ", wr.ID, job.bst_id)
+                //fmt.Println("worker id ", wr.ID, job.bst_id)
+                //fmt.Println("updated return queue ", wr.ID, job.bst_id)
+                //fmt.Println("computed hash ", wr.ID, job.bst_id)
+                
                 var hash int = job.tree.computeHash() //todo: extract below to outside, iterate over list of trees with hash_workers
-                fmt.Println("computed hash ", wr.ID, job.bst_id)
                 hash_bst_pair := HashBstID{hash: hash, bst_id: job.bst_id}
                 wr.ReturnQueue <- hash_bst_pair
-                fmt.Println("updated return queue ", wr.ID, job.bst_id)
+                
                 wr.SyncWaitGroup.Done()
             case <-wr.Quit:
                 fmt.Println("worker id calling quit", wr.ID)
@@ -55,12 +57,33 @@ func (wr *Worker) Start() {
     }() 
 }
 
+func (wr *Worker) StartAndUpdateMap() {
+    go func() {
+        for {
+            wr.Queue <- wr.JobChan //worker puts its jobChan on queue (channel of channels). wr.Queue populated by dispatcher.process()
+            select {
+            case job := <-wr.JobChan:
+                var hash int = job.tree.computeHash() //todo: extract below to outside, iterate over list of trees with hash_workers
+                hash_bst_pair := HashBstID{hash: hash, bst_id: job.bst_id}
+                wr.ReturnQueue <- hash_bst_pair
+                wr.SyncWaitGroup.Done()
+            case <-wr.Quit:
+                fmt.Println("worker id calling quit", wr.ID)
+                close(wr.JobChan)
+                return
+            }
+        }
+    }() 
+}
+
+
 type disp struct {
-    Workers  []*Worker  // this is the list of workers that dispatcher tracks
-    WorkChan JobChannel // client submits a job to this channel
-    Queue    JobQueue   // this is the shared JobPool between the workers
-    ReturnQueue chan HashBstID
-    SyncWaitGroup *sync.WaitGroup
+    Workers            []*Worker  // this is the list of workers that dispatcher tracks
+    WorkChan           JobChannel // client submits a job to this channel
+    Queue              JobQueue   // this is the shared JobPool between the workers
+    ReturnQueue        chan HashBstID
+    SyncWaitGroup      *sync.WaitGroup
+    UseWorkersForData  bool
 }
 
 
@@ -147,74 +170,51 @@ func (n *Node) in_order_traversal(result []int, count *int) []int {
 
 func (n *Node) Insert (value int){
     if (value > n.Value) {
-        //MOVE RIGHT, value larger
         if n.Right==nil {
-            //NO RIGHT CHILD, insert
             n.Right = &Node{Value : value}
         } else {
-            //repeat same method on right child
             n.Right.Insert(value)
         }
     } else if (value < n.Value) {
         if n.Left==nil {
-            //NO RIGHT CHILD, insert
             n.Left = &Node{Value : value}
         } else {
-            //repeat same method on right child
             n.Left.Insert(value)
         }
     } else {
-        //ALREADY EXISTS
         fmt.Println("already exists")
     }
 }
     
-func test_tree() *Node {
-    tree := &Node{Value: 100}
-    tree.Insert(53)
-    tree.Insert(203)
-    tree.Insert(19)
-    tree.Insert(76)
-    tree.Insert(150)
-    tree.Insert(310)
-    tree.Insert(7)
-    tree.Insert(24)
-    tree.Insert(88)
-    tree.Insert(276)
-    return tree
-}
-
-
-func (n *Node) Search (value int) bool {
+func build_trees(input_file *string, bst_list *[]*Node){
+    file, err := os.Open(*input_file)
+    if err != nil {
+        log.Fatal(err)
+    }
+    defer file.Close()
     
-    if (n==nil){
-        return false
-    }
-    if (value > n.Value) {
-        //MOVE RIGHT, value larger
-        return n.Right.Search(value)
-    } else if (value < n.Value) {
-        return n.Left.Search(value)
-    }
-    return true
-}
-
-func identicalTrees(a *Node, b *Node) bool {
-    //TODO: test for empty trees!
-    /*1. both empty */
-    if (a == nil && b == nil) {
-        return true
-    }
-    
-    /* 2. both non-empty -> compare them */
-    if (a.Value==b.Value) {
-        if (identicalTrees(a.Left, b.Left) && identicalTrees(a.Right, b.Right)){
-            return true
+    file_scanner := bufio.NewScanner(file)
+    // optionally, resize scanner's capacity for lines over 64K ... needed?
+    for file_scanner.Scan() {
+        var tree *Node;
+        var s scanner.Scanner
+        s.Init(strings.NewReader(file_scanner.Text()))
+        var newBST bool = true
+        for tok := s.Scan(); tok != scanner.EOF; tok = s.Scan() {
+            var converted int;
+            converted, _ = strconv.Atoi(s.TokenText())
+            if newBST{
+                tree = &Node{Value: converted}
+                newBST = false
+            } else {
+                tree.Insert(converted)
+            }
         }
+        *bst_list = append(*bst_list, tree)
     }
-    /* 3. one empty, one not -> false */
-    return false
 }
+
+
 
 func equalTrees(a *Node, b *Node) bool {
     count, count2 := 0,0
@@ -247,33 +247,7 @@ func parse_args() InputArgs {
     return args
 }
 
-func build_trees(input_file *string, bst_list *[]*Node){
-    file, err := os.Open(*input_file)
-    if err != nil {
-        log.Fatal(err)
-    }
-    defer file.Close()
-    
-    file_scanner := bufio.NewScanner(file)
-    // optionally, resize scanner's capacity for lines over 64K ... needed?
-    for file_scanner.Scan() {
-        var tree *Node;
-        var s scanner.Scanner
-        s.Init(strings.NewReader(file_scanner.Text()))
-        var newBST bool = true
-        for tok := s.Scan(); tok != scanner.EOF; tok = s.Scan() {
-            var converted int;
-            converted, _ = strconv.Atoi(s.TokenText())
-            if newBST{
-                tree = &Node{Value: converted}
-                newBST = false
-            } else {
-                tree.Insert(converted)
-            }
-        }
-        *bst_list = append(*bst_list, tree)
-    }
-}
+
 
 
 
@@ -365,7 +339,6 @@ func run_sequential(bst_list *[]*Node, bst_hashmap *map[int][]int,
     compare_trees(bst_list, bst_hashmap, tree_equal)
     //iterate over hashmaps, if key > 1, compare trees inside
 }
-
 
 
 func main() {

@@ -90,3 +90,34 @@ func run_sequential(input_file *string, bst_list *[]*Node, bst_hashmap *map[int]
     }
 }
 */
+
+func (n *Node) Search (value int) bool {
+    
+    if (n==nil){
+        return false
+    }
+    if (value > n.Value) {
+        //MOVE RIGHT, value larger
+        return n.Right.Search(value)
+    } else if (value < n.Value) {
+        return n.Left.Search(value)
+    }
+    return true
+}
+
+func identicalTrees(a *Node, b *Node) bool {
+    //TODO: test for empty trees!
+    /*1. both empty */
+    if (a == nil && b == nil) {
+        return true
+    }
+    
+    /* 2. both non-empty -> compare them */
+    if (a.Value==b.Value) {
+        if (identicalTrees(a.Left, b.Left) && identicalTrees(a.Right, b.Right)){
+            return true
+        }
+    }
+    /* 3. one empty, one not -> false */
+    return false
+}
