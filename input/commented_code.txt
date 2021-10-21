@@ -121,3 +121,9 @@ func identicalTrees(a *Node, b *Node) bool {
     /* 3. one empty, one not -> false */
     return false
 }
+
+func checkfile(e error) {
+    if e != nil {
+        panic(e)
+    }
+}
