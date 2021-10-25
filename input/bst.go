@@ -237,8 +237,8 @@ func compute_hash(tree *Node, bst_hashmap *map[int][]int, bst_id int,
     queue <- hash_bst_pair
 }
 
-/*func hash_worker(id int, job_channel chan <- Job, bst_hashmap *map[int][]int,
-                 wg *sync.WaitGroup, mutex *sync.Mutex, queue chan<- HashBstID){
+func hash_worker(id int, job_channel <-chan Job, bst_hashmap *map[int][]int,
+                 wg *sync.WaitGroup, mutex *sync.Mutex, queue chan<- HashBstID, workers_update bool){
     for job := range job_channel {
         var hash int = job.tree.computeHash() //todo: extract below to outside, iterate over list of trees with hash_workers
         if workers_update {
@@ -249,10 +249,9 @@ func compute_hash(tree *Node, bst_hashmap *map[int][]int, bst_id int,
             pair := HashBstID{hash: hash, bst_id: job.bst_id}
             queue <- pair
         }
-        wr.SyncWaitGroup.Done()
+        wg.Done()
     }   
 }
-*/
 
 func data_worker(id int, queue <-chan HashBstID, bst_hashmap *map[int][]int,
                  wg_data *sync.WaitGroup, mutex_data *sync.Mutex){
@@ -275,6 +274,7 @@ func run(bst_list *[]*Node, bst_hashmap *map[int][]int,
     /***STEP 1***/
     build_trees(args.input_file, bst_list) //always sequential to preserve tree ordering
     fmt.Println("number of trees: ", len(*bst_list))
+    job_channel := make(chan Job, len(*bst_list)) //HAS TO GO AFTER BUILD TREES!!!!
     queue := make(chan HashBstID, len(*bst_list)) //HAS TO GO AFTER BUILD TREES!!!!
     /***STEP 2--hash trees***/
     if (worker_args.sequential){
@@ -305,7 +305,7 @@ func run(bst_list *[]*Node, bst_hashmap *map[int][]int,
         wg.Add(len(*bst_list))
         fmt.Println("hash workers update map ", worker_args.hashwrkrs_update_map)
        
-        
+        /*
         dd := &disp{Workers:  make([]*Worker, *args.hash_workers),
                     WorkChan: make(JobChannel, len(*bst_list)),
                     Queue:    make(JobQueue),
@@ -319,13 +319,20 @@ func run(bst_list *[]*Node, bst_hashmap *map[int][]int,
         for i, tree := range *bst_list {
             dd.Submit(Job{ tree:tree, Name:fmt.Sprintf("JobID::%d", i), bst_id: i} )
         }
+        */
         
-        /*for i, tree := range *bst_list{
+        for id:=0; id < *args.hash_workers; id++ {
+            go hash_worker(id, job_channel, bst_hashmap,
+                           &wg, &mutex,  queue,worker_args.hashwrkrs_update_map)
+        }
+        start := time.Now()
+        for i, tree := range *bst_list{
             job_channel <- Job{ tree:tree, Name:fmt.Sprintf("JobID::%d", i), bst_id: i}
-            wg.Add(1)
-        }*/
-       
+        }
+        close(job_channel)
+        
         wg.Wait()
+        
         elapsed_hash := time.Since(start)
         fmt.Printf("hashing took %s\n", elapsed_hash)
         close(queue)
