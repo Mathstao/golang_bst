@@ -12,6 +12,7 @@ import (
     "strings"
     "sync"
     "time"
+    "errors"
 )
 
 
@@ -271,11 +272,15 @@ func run(bst_list *[]*Node, bst_hashmap *map[int][]int,
     var mutex sync.Mutex
     var wg_data sync.WaitGroup
     var mutex_data sync.Mutex
+    
+    tree_visited:= make(map[int]Visited)
+    
     /***STEP 1***/
     build_trees(args.input_file, bst_list) //always sequential to preserve tree ordering
     fmt.Println("number of trees: ", len(*bst_list))
     job_channel := make(chan Job, len(*bst_list)) //HAS TO GO AFTER BUILD TREES!!!!
     queue := make(chan HashBstID, len(*bst_list)) //HAS TO GO AFTER BUILD TREES!!!!
+    
     /***STEP 2--hash trees***/
     if (worker_args.sequential){
         if (worker_args.exit_map && worker_args.exit_hash){
@@ -366,8 +371,14 @@ func run(bst_list *[]*Node, bst_hashmap *map[int][]int,
         return
     }
     /***STEP 4--compare equal trees***/
-    compare_trees(bst_list, bst_hashmap, tree_equal)
+    if (*args.comp_workers==1){
+        compare_trees(bst_list, bst_hashmap, tree_equal) 
+    } else {
+        compare_trees_parallel(bst_list, bst_hashmap, tree_equal, *args.comp_workers, &tree_visited)
+    }
+    
 }
+
 
 func build_worker_args(args InputArgs) WorkersArgs {
     exit_hash, exit_map, hashwrkrs_update_map, sequential, extra_credit := false, false, false, false, false
@@ -425,6 +436,174 @@ func main() {
     }
     fmt.Println(tree_equal)
     
+}
+
+type Queue struct {
+    mu *sync.Mutex
+    capacity int
+    q        []CompareTreesPair
+}
+
+// FifoQueue 
+type FifoQueue interface {
+    Insert()
+    Remove()
+}
+
+// Insert inserts the item into the queue
+func (q *Queue) Insert(item CompareTreesPair) bool {
+    q.mu.Lock()
+    defer q.mu.Unlock()
+    if len(q.q) < int(q.capacity) {
+        q.q = append(q.q, item)
+        return true
+    }
+    return false
+}
+
+// Remove removes the oldest element from the queue
+func (q *Queue) Remove() (CompareTreesPair, error) {
+    var item CompareTreesPair
+    q.mu.Lock()
+    defer q.mu.Unlock()
+    if len(q.q) > 0 {
+        item := q.q[0]
+        q.q = q.q[1:]
+        return item, nil
+    }
+    return item, errors.New("Empty")
+}
+
+// CreateQueue creates an empty queue with desired capacity
+func CreateQueue(capacity int, mutex *sync.Mutex) *Queue {
+    return &Queue{
+        capacity: capacity,
+        q:        make([]CompareTreesPair, 0, capacity),
+        mu:       mutex,
+    }
+}
+
+type CompareTreesPair struct {
+    group_id int
+    tree_a_id int
+    tree_b_id int
+}
+
+type Visited struct {
+    isVisited bool
+    group_id int
+}
+
+func update_global_tree_equal(tree_equal *map[int][]int, a_id int, b_id int, 
+                              mutex *sync.Mutex, tree_visited *map[int]Visited){
+    
+    var a_visited Visited;
+    var b_visited Visited;
+    var a_ok bool;
+    var b_ok bool;
+    var id int;
+    mutex.Lock()
+    defer mutex.Unlock()
+    
+    a_visited, a_ok = (*tree_visited)[a_id]
+    b_visited, b_ok = (*tree_visited)[b_id]
+    if(!a_ok && !b_ok){
+        
+        if (a_id < b_id){
+            id = a_id
+        } else {
+            id = b_id
+        }
+        visited := Visited{isVisited: true, group_id: id}
+        (*tree_visited)[a_id] = visited
+        (*tree_visited)[b_id] = visited
+        return
+    }
+    if (a_ok && b_ok){
+        if (a_id < b_id){
+            id = a_visited.group_id
+        } else {
+            id = b_visited.group_id
+        }
+        visited := Visited{isVisited: true, group_id: id}
+        (*tree_visited)[b_id] = visited
+        (*tree_visited)[a_id] = visited
+        return
+    }
+    if (a_ok && !b_ok){
+        (*tree_visited)[b_id] = a_visited
+        return
+    }
+    if (b_ok && !a_ok){
+        (*tree_visited)[a_id] = b_visited
+        return
+    }
+    return
+}
+
+func comp_worker_run(q *Queue, tree_equal *map[int][]int, bst_list *[]*Node,
+                     mutex_visited *sync.Mutex, tree_visited *map[int]Visited, 
+                     continue_working <-chan int, wg *sync.WaitGroup){
+    for{
+        var my_error error;
+        var pair CompareTreesPair;
+        for{
+            _, ok := <- continue_working;
+            if (!ok){
+                
+                return
+            }
+            pair, my_error = q.Remove()
+            if (my_error==nil){
+                break
+            }
+            time.Sleep(100 * time.Millisecond)
+        }
+        var node *Node = (*bst_list)[ pair.tree_a_id ]
+        var next_node *Node = (*bst_list)[ pair.tree_b_id ]
+        var equal bool = equalTrees(node, next_node)
+        if equal{
+            update_global_tree_equal(tree_equal, pair.tree_a_id, pair.tree_b_id, 
+                                     mutex_visited, tree_visited)
+        }
+        wg.Done()
+    }
+}
+
+
+func compare_trees_parallel(bst_list *[]*Node, bst_hashmap *map[int][]int,
+                            tree_equal *map[int][]int, comp_workers int, 
+                            tree_visited *map[int]Visited){
+    var mutex sync.Mutex
+    var mutex_visited sync.Mutex
+    var wg sync.WaitGroup
+    
+    continue_working := make(chan int)
+    trees_work := CreateQueue(comp_workers, &mutex) //pointer!!
+    
+    //spin comp_workers up
+    for i:=0; i < comp_workers; i++ {
+        go comp_worker_run(trees_work, tree_equal, bst_list, &mutex_visited, tree_visited, continue_working, &wg)
+    }
+    
+    for group_id, bstids := range *bst_hashmap { //flatten out elements in hashmap
+        if (len(bstids) > 1){
+            for i:=0; i < len(bstids); i++ {
+                for j:=i+1; j < (len(bstids)); j++ {
+                    pair := CompareTreesPair{group_id: group_id, tree_a_id: bstids[i], tree_b_id: bstids[j],}
+                    wg.Add(1)
+                    for (!trees_work.Insert(pair)){
+                        //sleep the main thread until queue is freed
+                        time.Sleep(100 * time.Millisecond)
+                    }
+                    continue_working <- 1
+                }
+            }
+        }
+    }
+    wg.Wait()
+    close(continue_working)
+    fmt.Println(tree_visited)
 }
 
 func compare_trees(bst_list *[]*Node, bst_hashmap *map[int][]int,
