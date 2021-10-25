@@ -237,6 +237,23 @@ func compute_hash(tree *Node, bst_hashmap *map[int][]int, bst_id int,
     queue <- hash_bst_pair
 }
 
+/*func hash_worker(id int, job_channel chan <- Job, bst_hashmap *map[int][]int,
+                 wg *sync.WaitGroup, mutex *sync.Mutex, queue chan<- HashBstID){
+    for job := range job_channel {
+        var hash int = job.tree.computeHash() //todo: extract below to outside, iterate over list of trees with hash_workers
+        if workers_update {
+            mutex.Lock()
+            (*bst_hashmap)[hash] = append((*bst_hashmap)[hash], job.bst_id)
+            mutex.Unlock()
+        } else {
+            pair := HashBstID{hash: hash, bst_id: job.bst_id}
+            queue <- pair
+        }
+        wr.SyncWaitGroup.Done()
+    }   
+}
+*/
+
 func data_worker(id int, queue <-chan HashBstID, bst_hashmap *map[int][]int,
                  wg_data *sync.WaitGroup, mutex_data *sync.Mutex){
     for job := range queue {
@@ -287,6 +304,8 @@ func run(bst_list *[]*Node, bst_hashmap *map[int][]int,
     } else {
         wg.Add(len(*bst_list))
         fmt.Println("hash workers update map ", worker_args.hashwrkrs_update_map)
+       
+        
         dd := &disp{Workers:  make([]*Worker, *args.hash_workers),
                     WorkChan: make(JobChannel, len(*bst_list)),
                     Queue:    make(JobQueue),
@@ -300,6 +319,12 @@ func run(bst_list *[]*Node, bst_hashmap *map[int][]int,
         for i, tree := range *bst_list {
             dd.Submit(Job{ tree:tree, Name:fmt.Sprintf("JobID::%d", i), bst_id: i} )
         }
+        
+        /*for i, tree := range *bst_list{
+            job_channel <- Job{ tree:tree, Name:fmt.Sprintf("JobID::%d", i), bst_id: i}
+            wg.Add(1)
+        }*/
+       
         wg.Wait()
         elapsed_hash := time.Since(start)
         fmt.Printf("hashing took %s\n", elapsed_hash)
@@ -307,7 +332,7 @@ func run(bst_list *[]*Node, bst_hashmap *map[int][]int,
         if (!worker_args.hashwrkrs_update_map && *args.data_workers!=1){
             wg_data.Add(len(*bst_list))
             start_group := time.Now()
-            for id, _ := range *bst_list {
+            for id:=0; id < *args.data_workers; id++ {
                 go data_worker(id, queue, bst_hashmap,
                                &wg_data, &mutex_data)
             }
