@@ -52,6 +52,8 @@ type disp struct {
     Bst_hashmap        *map[int][]int
 }
 
+
+
 func (wr *Worker) Start() {
     go func() {
         for {
@@ -235,13 +237,24 @@ func compute_hash(tree *Node, bst_hashmap *map[int][]int, bst_id int,
     queue <- hash_bst_pair
 }
 
+func data_worker(id int, queue <-chan HashBstID, bst_hashmap *map[int][]int,
+                 wg_data *sync.WaitGroup, mutex_data *sync.Mutex){
+    for job := range queue {
+		mutex_data.Lock()
+        (*bst_hashmap)[job.hash] = append((*bst_hashmap)[job.hash], job.bst_id)
+        mutex_data.Unlock()
+		wg_data.Done()
+	}
+}
+
 func run(bst_list *[]*Node, bst_hashmap *map[int][]int,
          tree_equal *map[int][]int, args InputArgs, 
          worker_args WorkersArgs, test_hash_time bool) {
     
-    
     var wg sync.WaitGroup
     var mutex sync.Mutex
+    var wg_data sync.WaitGroup
+    var mutex_data sync.Mutex
     /***STEP 1***/
     build_trees(args.input_file, bst_list) //always sequential to preserve tree ordering
     fmt.Println("number of trees: ", len(*bst_list))
@@ -275,33 +288,44 @@ func run(bst_list *[]*Node, bst_hashmap *map[int][]int,
         wg.Add(len(*bst_list))
         fmt.Println("hash workers update map ", worker_args.hashwrkrs_update_map)
         dd := &disp{Workers:  make([]*Worker, *args.hash_workers),
-                    WorkChan: make(JobChannel),
+                    WorkChan: make(JobChannel, len(*bst_list)),
                     Queue:    make(JobQueue),
                     ReturnQueue: queue,
                     SyncWaitGroup: &wg,
                     WorkersUpdate: worker_args.hashwrkrs_update_map,
                     Mutex: &mutex,
-                    Bst_hashmap: bst_hashmap}
+                    Bst_hashmap: bst_hashmap}       
         dd.Start()
-
         start := time.Now()
         for i, tree := range *bst_list {
             dd.Submit(Job{ tree:tree, Name:fmt.Sprintf("JobID::%d", i), bst_id: i} )
         }
         wg.Wait()
-        elapsed := time.Since(start)
-        fmt.Printf("hashing took %s\n", elapsed)
+        elapsed_hash := time.Since(start)
+        fmt.Printf("hashing took %s\n", elapsed_hash)
+        close(queue)
+        if (!worker_args.hashwrkrs_update_map && *args.data_workers!=1){
+            wg_data.Add(len(*bst_list))
+            start_group := time.Now()
+            for id, _ := range *bst_list {
+                go data_worker(id, queue, bst_hashmap,
+                               &wg_data, &mutex_data)
+            }
+            wg_data.Wait()
+            elapsed_group := time.Since(start_group)
+            fmt.Printf("grouping took took %s\n", elapsed_group)
+        }
     }
     
-    close(queue)
+    //close(queue)
     
     if worker_args.exit_hash{
         return
     }
     
     /***STEP 3--find duplicates(data_workers)***/
-    if *args.data_workers==1{
-        for pair := range queue{
+    if *args.data_workers==1 {
+        for pair := range queue {
             (*bst_hashmap)[pair.hash] = append((*bst_hashmap)[pair.hash], pair.bst_id)
         }
     }
@@ -376,7 +400,7 @@ func compare_trees(bst_list *[]*Node, bst_hashmap *map[int][]int,
     
     var tree_group int = -1
     
-    for hash, bstids := range *bst_hashmap {
+    for _, bstids := range *bst_hashmap {
         this_group_visited := make(map[int]bool)
         if (len(bstids) > 1) {
             //fmt.Printf("Compare values in key: %d\n", hash)
