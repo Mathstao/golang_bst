@@ -494,7 +494,7 @@ type Visited struct {
     group_id int
 }
 
-func update_global_tree_equal(tree_equal *map[int][]int, a_id int, b_id int, 
+func update_global_tree_equal(a_id int, b_id int, 
                               mutex *sync.Mutex, tree_visited *map[int]Visited){
     
     var a_visited Visited;
@@ -541,7 +541,7 @@ func update_global_tree_equal(tree_equal *map[int][]int, a_id int, b_id int,
     return
 }
 
-func comp_worker_run(q *Queue, tree_equal *map[int][]int, bst_list *[]*Node,
+func comp_worker_run(q *Queue, bst_list *[]*Node,
                      mutex_visited *sync.Mutex, tree_visited *map[int]Visited, 
                      continue_working <-chan int, wg *sync.WaitGroup){
     for{
@@ -563,7 +563,7 @@ func comp_worker_run(q *Queue, tree_equal *map[int][]int, bst_list *[]*Node,
         var next_node *Node = (*bst_list)[ pair.tree_b_id ]
         var equal bool = equalTrees(node, next_node)
         if equal{
-            update_global_tree_equal(tree_equal, pair.tree_a_id, pair.tree_b_id, 
+            update_global_tree_equal(pair.tree_a_id, pair.tree_b_id, 
                                      mutex_visited, tree_visited)
         }
         wg.Done()
@@ -583,7 +583,7 @@ func compare_trees_parallel(bst_list *[]*Node, bst_hashmap *map[int][]int,
     
     //spin comp_workers up
     for i:=0; i < comp_workers; i++ {
-        go comp_worker_run(trees_work, tree_equal, bst_list, &mutex_visited, tree_visited, continue_working, &wg)
+        go comp_worker_run(trees_work, bst_list, &mutex_visited, tree_visited, continue_working, &wg)
     }
     
     for group_id, bstids := range *bst_hashmap { //flatten out elements in hashmap
@@ -603,7 +603,21 @@ func compare_trees_parallel(bst_list *[]*Node, bst_hashmap *map[int][]int,
     }
     wg.Wait()
     close(continue_working)
-    fmt.Println(tree_visited)
+    //fmt.Println(tree_visited)
+    final_map := make(map[int]int)
+    
+    var count int = 0;
+    var exists bool;
+    var id int
+    for key, value := range *tree_visited {
+        id, exists = final_map[value.group_id]
+        if (!exists){
+            final_map[value.group_id] = count
+            id = count
+            count++
+        }
+        (*tree_equal)[id] = append((*tree_equal)[id], key)
+    }
 }
 
 func compare_trees(bst_list *[]*Node, bst_hashmap *map[int][]int,
